@@ -1,0 +1,48 @@
+name: Build JustLay
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter create --platforms=android --project-name=justlay .
+      - name: Enable LAN networking
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('android/app/src/main/AndroidManifest.xml')
+          s=p.read_text().replace('<application','<uses-permission android:name="android.permission.INTERNET"/>\n    <application android:usesCleartextTraffic="true"')
+          p.write_text(s)
+          PY
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JustLay-Android-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter create --platforms=windows --project-name=justlay .
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - name: Package
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem build/windows -Recurse -Filter justlay.exe | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1
+          if (-not $exe) { throw 'Executable missing' }
+          Compress-Archive -Path "$($exe.DirectoryName)/*" -DestinationPath JustLay-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JustLay-Windows
+          path: JustLay-Windows.zip
